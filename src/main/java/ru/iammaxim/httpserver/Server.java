@@ -15,57 +15,22 @@ import java.security.KeyStore;
 public class Server extends Thread {
     public static final int PORT = 8080;
 
-    public SSLServerSocket serverSocket;
+    public ServerSocket serverSocket;
 
     public Server() throws IOException {
         this(PORT);
     }
 
-    private SSLContext createSSLContext() {
-        try {
-            try {
-                KeyStore keyStore = KeyStore.getInstance("JKS");
-                keyStore.load(null, null);
-
-                keyStore.store(new FileOutputStream("ssl.jks"), ("password").toCharArray());
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
-
-            KeyStore keyStore = KeyStore.getInstance("JKS");
-            InputStream is = new FileInputStream("ssl.jks");
-            keyStore.load(is, "password".toCharArray());
-            is.close();
-            //"SunX509"
-            KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            keyManagerFactory.init(keyStore, "password".toCharArray());
-            KeyManager[] km = keyManagerFactory.getKeyManagers();
-
-            TrustManagerFactory trustManagerFactory = TrustManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            trustManagerFactory.init(keyStore);
-            TrustManager[] tm = trustManagerFactory.getTrustManagers();
-            SSLContext sslContext = SSLContext.getInstance("TLSv1");
-            sslContext.init(km, tm, null);
-            return sslContext;
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        return null;
-    }
-
     public Server(int port) throws IOException {
         super();
-        SSLContext sslContext = createSSLContext();
-        SSLServerSocketFactory sslServerSocketFactory = sslContext.getServerSocketFactory();
-        serverSocket = (SSLServerSocket) sslServerSocketFactory.createServerSocket(port);
-        serverSocket.setEnabledProtocols(new String[] {"TLSv1", "TLSv1.1", "TLSv1.2", "SSLv3"});
+        serverSocket = new ServerSocket(port);
     }
 
     @Override
     public void run() {
         while (!isInterrupted()) {
             try {
-                SSLSocket socket = (SSLSocket) serverSocket.accept();
+                Socket socket = serverSocket.accept();
                 new ClientProcessor(socket).start();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -74,13 +39,12 @@ public class Server extends Thread {
     }
 
     public class ClientProcessor extends Thread {
-        private SSLSocket s;
+        private Socket s;
         private InputStream is;
         private OutputStream os;
         private String url;
-//        private int contentLength = 0;
 
-        public ClientProcessor(SSLSocket socket) {
+        public ClientProcessor(Socket socket) {
             super();
             s = socket;
         }
@@ -88,14 +52,6 @@ public class Server extends Thread {
         @Override
         public void run() {
             try {
-                s.setEnabledCipherSuites(s.getSupportedCipherSuites());
-                s.startHandshake();
-                SSLSession sslSession = s.getSession();
-
-                System.out.println("SSLSession :");
-                System.out.println("\tProtocol : " + sslSession.getProtocol());
-                System.out.println("\tCipher suite : " + sslSession.getCipherSuite());
-
                 is = s.getInputStream();
                 os = s.getOutputStream();
                 String response = "no response";
@@ -111,10 +67,8 @@ public class Server extends Thread {
                     writeHTMLheader();
                     writeResponse("<html><body><h1>" + response + "</h1></body></html>");
                 }
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
-            } catch (Throwable throwable) {
-                throwable.printStackTrace();
             } finally {
                 try {
                     s.close();
@@ -153,14 +107,14 @@ public class Server extends Thread {
             os.flush();
         }
 
-        private void readInputHeaders() throws Throwable {
+        private void readInputHeaders() throws Exception {
             BufferedReader br = new BufferedReader(new InputStreamReader(is));
             while (true) {
                 String s = br.readLine();
                 if (s.startsWith("GET")) {
                     url = s.substring(s.indexOf(' ') + 1, s.lastIndexOf(' '));
                 }
-                if (s == null || s.trim().length() == 0) {
+                if (s.trim().length() == 0) {
                     break;
                 }
             }
